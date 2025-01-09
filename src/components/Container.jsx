@@ -1,18 +1,25 @@
-import React, { Component } from 'react'
+import React, { Component, useState } from 'react'
 import NewsComponent from './NewsComponent'
+// import { Pagination } from './Pagination';
+import InfiniteScroll from 'react-infinite-scroll-component';
 
-export class Container extends Component {
+const Container = ({api_key, category, pageSize, page, onPageChange}) => {
 
-  constructor(){
-    super();
-    this.state = {
-      loading: true,
-      error: null,
-      news: []
-    };
-  }
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [news, setNews] = useState([]);
+    const [totalResults, setTotalResults] = useState(0);
+    const [currentPage, setCurrentPage] = useState(1);
 
-    getDate(){
+    useEffect(() =>{
+      setCurrentPage(1);
+    }, [category]);
+    
+    useEffect(() =>{
+      fetchData();
+    }, [category, currentPage]);
+
+    const getDate = ()=>{
         const today = new Date();
         const yesterday = new Date(today);
         yesterday.setDate(today.getDate() - 1);
@@ -21,41 +28,59 @@ export class Container extends Component {
         const day = String(yesterday.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
     }
-     
-    componentDidMount() {
-        const date = this.getDate();
-        const url = `https://newsapi.org/v2/everything?q=Apple&from=${date}&sortBy=popularity&apiKey=43ed82eb8a7c41d59b1bd94de06673f5`;
-        fetch(url).then((response) => {
-          if(!response.ok){
-            throw new Error('Http error! status: ' + response.error);
-          }
-          return response.json();
-         }).then((result)=>{
-           this.setState({loading: false, news: result.articles})
-           this.state.news.filter((article) => article.title.toLowerCase() !== 'removed');
-           console.log(this.state.news);
-         }).catch((error) => {
-          this.setState({loading: false, error: error.message})
-         });
+    
+    const fetchData = () => {
+      const date = this.getDate();
+      const url = `https://newsapi.org/v2/top-headlines?fromDate=${date}&category=${category}&pageSize=${pageSize}&page=${currentPage}&apiKey=${api_key}`;
+      console.log(url);
+
+      fetch(url).then((response) => {
+        if(!response.ok){
+          throw new Error('Http error! status: ' + response.status);
+        }
+        return response.json();
+        }).then((result)=>{
+
+          setLoading(false);          
+          setTotalResults(result.totalResults);  // update total results for pagination
+          setNews((prevNews)=>
+            [...prevNews, 
+              ...(result.articles.filter((article)=>
+                article.title?.toLowerCase() !== '[removed]'
+            ) || [])
+          ]);
+        }).catch((error) => {
+          setLoading(false);
+          setError(error.message);
+        }
+      );
     }
-  render() {
+
+    const fetchMoreData = () => {
+      setCurrentPage(currentPage + 1);
+    };
+    
     return (
       <div className="container text-center">
-        <h2 className="text-center">News Today</h2>
-        <div className="row">
-          {this.state.loading && 'Loading....'}
-          {this.state.error && `error: ${this.state.error}`}
-          {!this.state.loading && !this.state.error && 
-            this.state.news.map((currNews) => {
-              return <div className="col-md-4 col-sm-6 mb-4">
+        <h2 className="text-center">News Today: {category.charAt(0).toUpperCase()+category.slice(1)}</h2>
+
+        {loading && 'Loading....'}
+        {error && `error: ${error}`}
+        <InfiniteScroll className="row"
+          dataLength={news.length}
+          next={fetchMoreData}
+          hasMore={news.length < totalResults}
+          loader={<h4>Loading...</h4>}>
+          
+            {news.map((currNews) => {
+              return <div className="col-md-4 col-sm-6 mb-4" key={currNews.url}>
                 <NewsComponent currNews={currNews}/>
               </div>
             })
           }
-        </div>
+        </InfiniteScroll>
       </div>
     )
   }
-}
 
 export default Container
